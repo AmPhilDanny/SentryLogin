@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply min-h-screen bg-surface text-gray-100;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-gray-700/50 bg-surface-light p-4 shadow-sm;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-300 hover:bg-surface-lighter hover:text-white;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-low {
+    @apply badge bg-risk-low/20 text-risk-low;
+  }
+
+  .badge-medium {
+    @apply badge bg-risk-medium/20 text-risk-medium;
+  }
+
+  .badge-high {
+    @apply badge bg-risk-high/20 text-risk-high;
+  }
+
+  .badge-critical {
+    @apply badge bg-risk-critical/20 text-risk-critical;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-gray-600 bg-surface-lighter px-3 py-2 text-sm text-gray-100 placeholder-gray-400 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent;
+  }
+}
