@@ -1,0 +1,85 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_TYPE: sqlite
+      DATABASE_PATH: /app/data/sentry.sqlite
+      ML_SERVICE_URL: http://ml-service:8000
+      PORT: 3000
+      CORS_ORIGIN: http://localhost:5173
+    volumes:
+      - sqlitedata:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/config/rules').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: /app/models
+    volumes:
+      - modeldata:/app/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  sqlitedata:
+  modeldata:
+
+# --- Optional Postgres backend (opt-in) -------------------------------------
+# The app defaults to SQLite (zero-config demo). To use Postgres instead:
+#   1. uncomment the `postgres` service below
+#   2. set backend environment: DATABASE_TYPE=postgres and
+#      DATABASE_URL=postgresql://sentry:sentry@postgres:5432/sentry_login
+#   3. keep the same backend port/healthcheck config
+#
+#  postgres:
+#    image: postgres:15-alpine
+#    environment:
+#      POSTGRES_USER: sentry
+#      POSTGRES_PASSWORD: sentry
+#      POSTGRES_DB: sentry_login
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - pgdata:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U sentry"]
+#      interval: 5s
+#      timeout: 5s
+#      retries: 5
+#
+#  pgdata:

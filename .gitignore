@@ -1,0 +1,49 @@
+node_modules/
+dist/
+build/
+.next/
+
+.env
+.env.local
+.env.*.local
+
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+.python-version
+*.egg
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+*.log
+.DS_Store
+Thumbs.db
+
+coverage/
+.turbo/
+
+# Local database (dev SQLite)
+backend/db/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Tooling state / operational scratch (may contain credentials)
+.omo/
+.opencode/
+.codegraph/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Secrets shipped inside workflow docs (NOT to be committed)
+.github/workflows/Docs/Supabase etc configs.txt
