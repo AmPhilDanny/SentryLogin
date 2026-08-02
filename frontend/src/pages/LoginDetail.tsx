@@ -179,6 +179,27 @@ export default function LoginDetail() {
             </div>
           </div>
 
+          {login.alert && login.alert.status !== 'open' && (
+            <div className="card flex flex-wrap items-center justify-between gap-3 border-l-4 border-l-accent">
+              <div>
+                <h3 className="font-semibold text-white">Triage Status</h3>
+                <p className="text-sm text-gray-400">
+                  Status{' '}
+                  <span className="font-medium text-white">{login.alert.status}</span>
+                  {login.alert.resolution
+                    ? ` · ${login.alert.resolution.replace(/_/g, ' ')}`
+                    : ''}
+                  {login.alert.resolvedAt
+                    ? ` · ${new Date(login.alert.resolvedAt).toLocaleString()}`
+                    : ''}
+                </p>
+                {login.alert.notes && (
+                  <p className="mt-1 text-sm text-gray-300">“{login.alert.notes}”</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {login.aiExplanation && (
             <div className="card border-risk-high/40 bg-risk-high/5">
               <h3 className="flex items-center gap-2 font-semibold text-white">

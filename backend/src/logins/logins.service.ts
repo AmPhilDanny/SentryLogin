@@ -3,6 +3,7 @@ import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Login } from './login.entity';
 import { RiskScore } from './risk-score.entity';
+import { Alert } from '../alerts/alert.entity';
 import { RuleHit } from './rule-hit.entity';
 import { UserFeature } from './user-feature.entity';
 import { ExplanationsService } from '../explanations/explanations.service';
@@ -87,18 +88,28 @@ export class LoginsService {
   }
 
   async findOne(id: string) {
-    const login = await this.loginRepo
+    const { entities, raw } = await this.loginRepo
       .createQueryBuilder('login')
       .leftJoinAndSelect('login.user', 'user')
       .leftJoinAndSelect('login.riskScore', 'risk')
       .leftJoinAndSelect('login.ruleHits', 'hits')
       .leftJoinAndSelect('login.features', 'features')
+      .leftJoin(Alert, 'alert', 'alert.login_id = login.id')
+      .addSelect('alert.status', 'alert_status')
+      .addSelect('alert.resolution', 'alert_resolution')
+      .addSelect('alert.resolved_by', 'alert_resolved_by')
+      .addSelect('alert.resolved_at', 'alert_resolved_at')
+      .addSelect('alert.notes', 'alert_notes')
       .where('login.id = :id', { id })
-      .getOne();
+      .getRawAndEntities();
+
+    const login = entities[0];
 
     if (!login) {
       throw new NotFoundException(`Login ${id} not found`);
     }
+
+    const alertRow = raw?.[0] ?? {};
 
     const features = login.features?.[0];
     const explainThreshold = this.configService.getRules().explainThreshold;
@@ -130,6 +141,17 @@ export class LoginsService {
           }
         : null,
       aiExplanation,
+      alert: alertRow.alert_status
+        ? {
+            status: alertRow.alert_status as string,
+            resolution: (alertRow.alert_resolution as string | null) ?? null,
+            resolvedBy: (alertRow.alert_resolved_by as string | null) ?? null,
+            resolvedAt: alertRow.alert_resolved_at
+              ? new Date(alertRow.alert_resolved_at as string).toISOString()
+              : null,
+            notes: (alertRow.alert_notes as string | null) ?? null,
+          }
+        : null,
     };
   }
 

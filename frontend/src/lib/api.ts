@@ -59,6 +59,13 @@ export interface LoginDetail extends LoginRow {
   ruleHits: RuleHit[];
   features?: LoginFeatures;
   aiExplanation?: AiExplanation | null;
+  alert?: {
+    status: AlertStatus;
+    resolution: AlertResolution | null;
+    resolvedBy: string | null;
+    resolvedAt: string | null;
+    notes: string | null;
+  } | null;
 }
 
 export interface AiExplanation {
@@ -80,7 +87,18 @@ export interface UserProfile {
   daysSpan: number;
 }
 
-export type AlertStatus = 'open' | 'dismissed' | 'escalated';
+export type AlertStatus =
+  | 'open'
+  | 'dismissed'
+  | 'escalated'
+  | 'investigated'
+  | 'resolved';
+
+export type AlertResolution =
+  | 'fraud'
+  | 'positive'
+  | 'false_positive'
+  | 'no_action';
 
 export interface AlertItem {
   loginId: string;
@@ -96,6 +114,10 @@ export interface AlertItem {
   finalScore: number;
   label: string;
   status: AlertStatus;
+  resolution: AlertResolution | null;
+  resolvedBy: string | null;
+  notes: string | null;
+  resolvedAt: string | null;
 }
 
 export interface Stats {
@@ -354,6 +376,13 @@ export const api = {
     return request<AlertItem>(`/alerts/${loginId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  },
+
+  resolveAlert(loginId: string, resolution: AlertResolution, notes?: string) {
+    return request<AlertItem>(`/alerts/${loginId}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resolution, notes: notes ?? null }),
     });
   },
 
