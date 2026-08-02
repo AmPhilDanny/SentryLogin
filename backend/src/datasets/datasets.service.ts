@@ -90,7 +90,7 @@ export class DatasetsService {
       stage: null,
       progress: 0,
       detection: JSON.stringify(detection),
-      rawCsv: buffer.toString('utf-8'),
+      rawCsv: buffer.toString('utf-8').replace(/^\uFEFF/, ''),
     });
     const saved = await this.datasetRepo.save(dataset);
     return {
@@ -121,7 +121,7 @@ export class DatasetsService {
     const dataset = await this.datasetRepo.findOne({ where: { id } });
     if (!dataset) throw new NotFoundException(`Dataset ${id} not found`);
 
-    const raw = dataset.rawCsv ?? '';
+    const raw = (dataset.rawCsv ?? '').replace(/^\uFEFF/, '');
     const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
     let detection: DetectionResult | null = null;
     try {
