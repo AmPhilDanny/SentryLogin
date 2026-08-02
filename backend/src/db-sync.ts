@@ -13,6 +13,8 @@ import { RuleHit } from './logins/rule-hit.entity';
 import { RiskScore } from './logins/risk-score.entity';
 import { AiExplanation } from './explanations/ai-explanation.entity';
 import { Alert } from './alerts/alert.entity';
+import { AuthUser } from './auth/auth-user.entity';
+import { Dataset } from './datasets/dataset.entity';
 
 const ENTITIES = [
   User,
@@ -22,6 +24,8 @@ const ENTITIES = [
   RiskScore,
   AiExplanation,
   Alert,
+  AuthUser,
+  Dataset,
 ];
 
 async function main(): Promise<void> {
