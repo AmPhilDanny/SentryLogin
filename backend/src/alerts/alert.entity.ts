@@ -6,6 +6,9 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+const timestampColumnType =
+  process.env.DATABASE_TYPE === 'postgres' ? 'timestamp' : 'datetime';
+
 export type AlertStatus =
   | 'open'
   | 'dismissed'
@@ -39,7 +42,7 @@ export class Alert {
   @Column({ name: 'notes', type: 'text', nullable: true })
   notes!: string | null;
 
-  @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
+  @Column({ name: 'resolved_at', type: timestampColumnType, nullable: true })
   resolvedAt!: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
