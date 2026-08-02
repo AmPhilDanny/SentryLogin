@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
@@ -12,6 +13,9 @@ import { MlModule } from './ml/ml.module';
 import { UsersModule } from './users/users.module';
 import { ExplanationsModule } from './explanations/explanations.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { AuthModule } from './auth/auth.module';
+import { DatasetsModule } from './datasets/datasets.module';
+import { JwtAuthGuard, RolesGuard } from './auth/auth.guards';
 
 function buildOrmConfig(): TypeOrmModuleOptions {
   const common = {
@@ -43,6 +47,8 @@ function buildOrmConfig(): TypeOrmModuleOptions {
 @Module({
   imports: [
     TypeOrmModule.forRoot(buildOrmConfig()),
+    AuthModule,
+    DatasetsModule,
     IngestionModule,
     LoginsModule,
     ConfigModule,
@@ -53,6 +59,10 @@ function buildOrmConfig(): TypeOrmModuleOptions {
     UsersModule,
     ExplanationsModule,
     AlertsModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

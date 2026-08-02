@@ -13,6 +13,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { api, AlertItem, AlertStatus } from '../lib/api';
+import { useAuth } from '../lib/auth';
 
 type StatusFilter = 'all' | AlertStatus;
 
@@ -31,6 +32,8 @@ const STATUS_STYLES: Record<AlertStatus, string> = {
 
 export default function Alerts() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  const canAct = hasRole(['manager', 'super_admin']);
   const [data, setData] = useState<AlertItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -188,7 +191,7 @@ export default function Alerts() {
                       </td>
                       <td className="py-2.5">
                         <div className="flex gap-1">
-                          {item.status !== 'open' && (
+                          {canAct && item.status !== 'open' && (
                             <button
                               onClick={() => handleAction(item, 'open')}
                               disabled={actingId === item.loginId}
@@ -198,7 +201,7 @@ export default function Alerts() {
                               <Eye className="h-3.5 w-3.5" />
                             </button>
                           )}
-                          {item.status !== 'dismissed' && (
+                          {canAct && item.status !== 'dismissed' && (
                             <button
                               onClick={() => handleAction(item, 'dismissed')}
                               disabled={actingId === item.loginId}
@@ -208,7 +211,7 @@ export default function Alerts() {
                               <Ban className="h-3.5 w-3.5" />
                             </button>
                           )}
-                          {item.status !== 'escalated' && (
+                          {canAct && item.status !== 'escalated' && (
                             <button
                               onClick={() => handleAction(item, 'escalated')}
                               disabled={actingId === item.loginId}

@@ -131,6 +131,7 @@ GitHub repo `AmPhilDanny/SentryLogin` → branch `main` → service name, instan
 | `DATABASE_URL` | `postgresql://postgres.<PROJECT_REF>:<URL_ENCODED_PW>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres` |
 | `ML_SERVICE_URL` | `https://sentrylogin-ml.onrender.com` |
 | `CORS_ORIGIN` | `https://sentrylogin-frontend.onrender.com` |
+| `JWT_SECRET` | any long random string (e.g. `openssl rand -hex 32`). Falls back to a dev secret if unset — set this in production! |
 | `PORT` | (Render injects automatically) |
 
 > `node dist/db-sync` runs before boot: it creates/updates the schema on every deploy
@@ -161,6 +162,40 @@ Deploy this **last**, after the api URL exists.
 
 `https://sentrylogin-ml.onrender.com` · `https://sentrylogin-api.onrender.com` ·
 `https://sentrylogin-frontend.onrender.com`
+
+---
+
+## 3.4 Auth & roles
+
+Every API call except `POST /api/auth/login` requires a Bearer token. The first super admin
+is **seeded automatically on boot** (db-sync) if no auth user exists:
+
+```
+email:    admin@sentry.local
+password: Admin@1234
+```
+
+Change it after first login, or create more users via `POST /api/auth/users` (super_admin only).
+
+| Role | Permissions |
+|---|---|
+| `analyst` | View everything: dashboards, logins, alerts (read-only), datasets list/preview/download, config |
+| `manager` | Analyst + upload CSVs, dismiss/escalate alerts, edit rule config |
+| `super_admin` | Everything + delete datasets, create/list/delete auth users |
+
+Auth API: `POST /api/auth/login` · `GET /api/auth/me` · `GET/POST /api/auth/users` ·
+`DELETE /api/auth/users/:id` (last two super_admin only).
+
+## 3.5 Datasets API
+
+Every uploaded CSV is tracked in the `datasets` table (filename, row counts, uploader, date);
+its logins carry a `dataset_id`. Deleting a dataset cascades to its logins, features, rule
+hits, risk scores, explanations and alerts.
+
+- `GET /api/datasets` — list all datasets (any role)
+- `GET /api/datasets/:id/preview?limit=50` — first rows of the dataset (any role)
+- `GET /api/datasets/:id/download` — regenerated CSV file (any role)
+- `DELETE /api/datasets/:id` — remove dataset + all related rows (super_admin only)
 
 ---
 

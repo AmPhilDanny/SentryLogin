@@ -10,6 +10,7 @@ import { RiskScore } from '../logins/risk-score.entity';
 import { FeaturesModule } from '../features/features.module';
 import { RulesModule } from '../rules/rules.module';
 import { ConfigModule } from '../config/config.module';
+import { DatasetsModule } from '../datasets/datasets.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ConfigModule } from '../config/config.module';
     FeaturesModule,
     RulesModule,
     ConfigModule,
+    DatasetsModule,
   ],
   controllers: [IngestionController],
   providers: [IngestionService],

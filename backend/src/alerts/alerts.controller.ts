@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { IsIn } from 'class-validator';
 import { AlertsService, AlertQuery } from './alerts.service';
 import { AlertStatus } from './alert.entity';
+import { Roles } from '../auth/auth.guards';
 
 class UpdateAlertStatusDto {
   @IsIn(['open', 'dismissed', 'escalated'], {
@@ -24,6 +25,7 @@ export class AlertsController {
   }
 
   @Patch(':loginId/status')
+  @Roles('manager', 'super_admin')
   async updateStatus(
     @Param('loginId') loginId: string,
     @Body() body: UpdateAlertStatusDto,

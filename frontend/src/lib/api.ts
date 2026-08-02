@@ -1,4 +1,17 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const TOKEN_KEY = 'sentry_token';
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 export interface LoginRow {
   id: string;
@@ -102,6 +115,7 @@ export interface IngestResult {
   valid: number;
   imported: number;
   flagged: number;
+  datasetId: string;
   errors: { row: number; message: string }[];
 }
 
@@ -113,16 +127,68 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export type Role = 'analyst' | 'manager' | 'super_admin';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: Role;
+  displayName: string | null;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  user: AuthUser;
+}
+
+export interface DatasetItem {
+  id: string;
+  filename: string;
+  rowCount: number;
+  importedCount: number;
+  flaggedCount: number;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+export interface DatasetPreview {
+  columns: string[];
+  rows: (string | number | boolean | null)[][];
+  total: number;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    clearToken();
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired — please log in');
+  }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
 export const api = {
+  login(email: string, password: string) {
+    return request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  me() {
+    return request<AuthUser>('/auth/me');
+  },
+
   getLogins(params?: Record<string, string>) {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return request<PaginatedResponse<LoginDetail>>(`/logins${qs}`);
@@ -155,9 +221,50 @@ export const api = {
   uploadCsv(file: File) {
     const form = new FormData();
     form.append('file', file);
-    return fetch(`${API_BASE}/ingest/csv`, { method: 'POST', body: form }).then(
-      (r) => r.json() as Promise<IngestResult>,
-    );
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(`${API_BASE}/ingest/csv`, {
+      method: 'POST',
+      headers,
+      body: form,
+    }).then((r) => {
+      if (r.status === 401) {
+        clearToken();
+        window.location.href = '/login';
+        throw new Error('Session expired — please log in');
+      }
+      return r.json() as Promise<IngestResult>;
+    });
+  },
+
+  getDatasets() {
+    return request<DatasetItem[]>('/datasets');
+  },
+
+  getDatasetPreview(id: string, limit = 50) {
+    return request<DatasetPreview>(`/datasets/${id}/preview?limit=${limit}`);
+  },
+
+  async downloadDataset(item: DatasetItem) {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/datasets/${item.id}/download`, { headers });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = item.filename.replace(/\.csv$/i, '') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  deleteDataset(id: string) {
+    return request<{ deleted: boolean }>(`/datasets/${id}`, { method: 'DELETE' });
   },
 
   getConfig() {

@@ -7,11 +7,14 @@
   JoinColumn,
   OneToOne,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { RiskScore } from './risk-score.entity';
 import { RuleHit } from './rule-hit.entity';
 import { UserFeature } from './user-feature.entity';
+
+const timestampColumnType = process.env.DATABASE_TYPE === 'postgres' ? 'timestamp' : 'datetime';
 
 @Entity('logins')
 export class Login {
@@ -34,7 +37,11 @@ export class Login {
   @OneToMany(() => UserFeature, (uf) => uf.login)
   features!: UserFeature[];
 
-  @Column({ type: 'timestamp' })
+  @Column({ name: 'dataset_id', type: 'uuid', nullable: true })
+  @Index()
+  datasetId!: string | null;
+
+  @Column({ type: timestampColumnType })
   timestamp!: Date;
 
   @Column()

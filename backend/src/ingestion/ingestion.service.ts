@@ -11,6 +11,7 @@ import { RiskScore } from '../logins/risk-score.entity';
 import { FeaturesService, LoginEvent } from '../features/features.service';
 import { RulesService, riskLabel } from '../rules/rules.service';
 import { ConfigService } from '../config/config.service';
+import { DatasetsService } from '../datasets/datasets.service';
 
 export interface LoginRow {
   username: string;
@@ -29,6 +30,7 @@ export interface IngestSummary {
   errors: { row: number; message: string }[];
   imported: number;
   flagged: number;
+  datasetId: string;
 }
 
 const REQUIRED_COLUMNS = [
@@ -55,9 +57,14 @@ export class IngestionService {
     private readonly featuresService: FeaturesService,
     private readonly rulesService: RulesService,
     private readonly configService: ConfigService,
+    private readonly datasetsService: DatasetsService,
   ) {}
 
-  async processCsv(buffer: Buffer): Promise<IngestSummary> {
+  async processCsv(
+    buffer: Buffer,
+    filename: string,
+    createdBy: string | null,
+  ): Promise<IngestSummary> {
     const content = buffer.toString('utf-8');
     const rows: Record<string, string>[] = parse(content, {
       columns: true,
@@ -89,7 +96,9 @@ export class IngestionService {
       });
     }
 
-    const { imported, flagged } = await this.persistAndAnalyze(valid);
+    const dataset = await this.datasetsService.create(filename, createdBy);
+    const { imported, flagged } = await this.persistAndAnalyze(valid, dataset.id);
+    await this.datasetsService.finalize(dataset.id, rows.length, imported, flagged);
 
     return {
       total: rows.length,
@@ -97,11 +106,13 @@ export class IngestionService {
       errors,
       imported,
       flagged,
+      datasetId: dataset.id,
     };
   }
 
   private async persistAndAnalyze(
     rows: LoginRow[],
+    datasetId: string,
   ): Promise<{ imported: number; flagged: number }> {
     const userById = await this.ensureUsers(rows.map((r) => r.username));
     const config = this.configService.getRules();
@@ -151,6 +162,7 @@ export class IngestionService {
         login.device = row.device;
         login.browser = row.browser;
         login.success = event.success;
+        login.datasetId = datasetId;
         logins.push(login);
 
         const computed = this.featuresService.compute(event, history);

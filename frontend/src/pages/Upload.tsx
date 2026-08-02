@@ -1,16 +1,22 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, FileText, AlertCircle, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { api, IngestResult } from '../lib/api';
+import { useAuth } from '../lib/auth';
 
 export default function Upload() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<IngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  if (!hasRole(['manager', 'super_admin'])) {
+    return <Navigate to="/" replace />;
+  }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
