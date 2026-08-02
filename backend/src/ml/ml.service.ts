@@ -223,36 +223,51 @@ export class MlService {
     }[],
   ): Promise<void> {
     const qr = this.riskScoreRepo.manager.connection.createQueryRunner();
+    const isPostgres =
+      this.riskScoreRepo.manager.connection.options.type === 'postgres';
     try {
       await qr.connect();
-      await qr.query('PRAGMA journal_mode = WAL');
-      await qr.query('PRAGMA synchronous = NORMAL');
+      if (!isPostgres) {
+        await qr.query('PRAGMA journal_mode = WAL');
+        await qr.query('PRAGMA synchronous = NORMAL');
+      }
       await qr.startTransaction();
       for (let i = 0; i < updates.length; i += UPDATE_CHUNK) {
         const chunk = updates.slice(i, i + UPDATE_CHUNK);
-        const mlWhen: string[] = [];
-        const totalWhen: string[] = [];
-        const labelWhen: string[] = [];
         const params: (string | number)[] = [];
-        for (const u of chunk) {
-          mlWhen.push('WHEN ? THEN ?');
-          params.push(u.loginId, u.mlScore);
-        }
-        for (const u of chunk) {
-          totalWhen.push('WHEN ? THEN ?');
-          params.push(u.loginId, u.totalScore);
-        }
-        for (const u of chunk) {
-          labelWhen.push('WHEN ? THEN ?');
-          params.push(u.loginId, u.label);
-        }
-        const ids = chunk.map((u) => u.loginId);
+        // Postgres uses $n placeholders; SQLite uses ?.
+        const ph = () =>
+          isPostgres ? `$${params.length + 1}` : '?';
+        const nextPair = (loginId: string, value: string | number) => {
+          const loginPh = ph();
+          params.push(loginId);
+          const valuePh = ph();
+          params.push(value);
+          return { loginPh, valuePh };
+        };
+        const mlWhen = chunk.map((u) => {
+          const { loginPh, valuePh } = nextPair(u.loginId, u.mlScore);
+          return `WHEN ${loginPh}::text THEN ${valuePh}::real`;
+        });
+        const totalWhen = chunk.map((u) => {
+          const { loginPh, valuePh } = nextPair(u.loginId, u.totalScore);
+          return `WHEN ${loginPh}::text THEN ${valuePh}::real`;
+        });
+        const labelWhen = chunk.map((u) => {
+          const { loginPh, valuePh } = nextPair(u.loginId, u.label);
+          return `WHEN ${loginPh}::text THEN ${valuePh}::text`;
+        });
+        const ids = chunk.map((u) => {
+          const idPh = ph();
+          params.push(u.loginId);
+          return `${idPh}::text`;
+        });
         const sql = `UPDATE risk_scores SET
-          ml_score = CASE login_id ${mlWhen.join(' ')} ELSE ml_score END,
-          total_score = CASE login_id ${totalWhen.join(' ')} ELSE total_score END,
-          label = CASE login_id ${labelWhen.join(' ')} ELSE label END
-          WHERE login_id IN (${ids.map(() => '?').join(',')})`;
-        await qr.query(sql, [...params, ...ids]);
+          ml_score = CASE login_id::text ${mlWhen.join(' ')} ELSE ml_score END,
+          total_score = CASE login_id::text ${totalWhen.join(' ')} ELSE total_score END,
+          label = CASE login_id::text ${labelWhen.join(' ')} ELSE label END
+          WHERE login_id::text IN (${ids.join(',')})`;
+        await qr.query(sql, params);
       }
       await qr.commitTransaction();
     } catch (error) {

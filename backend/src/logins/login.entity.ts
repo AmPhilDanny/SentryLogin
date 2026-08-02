@@ -34,7 +34,7 @@ export class Login {
   @OneToMany(() => UserFeature, (uf) => uf.login)
   features!: UserFeature[];
 
-  @Column({ type: 'datetime' })
+  @Column({ type: 'timestamp' })
   timestamp!: Date;
 
   @Column()

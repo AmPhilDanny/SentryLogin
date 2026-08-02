@@ -26,6 +26,7 @@ function buildOrmConfig(): TypeOrmModuleOptions {
       url:
         process.env.DATABASE_URL ||
         'postgresql://postgres:postgres@localhost:5432/sentry_login',
+      ssl: { rejectUnauthorized: false },
     };
   }
 

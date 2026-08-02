@@ -209,7 +209,12 @@ export class IngestionService {
       await this.bulkInsert(queryRunner, this.riskScoreRepo, riskScores);
       await queryRunner.commitTransaction();
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch {
+        // Connection may already be dead (e.g. pooler dropped it) — the
+        // original error below is the one that matters.
+      }
       throw error;
     } finally {
       await queryRunner.release();

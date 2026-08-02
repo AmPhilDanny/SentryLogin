@@ -1,0 +1,76 @@
+# Render Blueprint — deploys the full SentryLogin stack.
+# Deploy: Render Dashboard → New → Blueprint → select this repo (main branch).
+# Order of creation: ml-service → api → frontend (Render resolves dependencies
+# via the "fromService" env values below).
+services:
+  # --------------------------------------------------------------------------
+  # 1) ML Service (FastAPI + scikit-learn) — must exist before api deploys
+  # --------------------------------------------------------------------------
+  - type: web
+    name: sentrylogin-ml
+    runtime: python
+    plan: free
+    rootDir: ml-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8000
+
+  # --------------------------------------------------------------------------
+  # 2) Backend API (NestJS) — connects to Supabase Postgres + the ML service
+  # --------------------------------------------------------------------------
+  - type: web
+    name: sentrylogin-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    # db-sync creates/updates the Supabase schema on every boot (production
+    # disables TypeORM auto-sync), then the API starts.
+    startCommand: node dist/db-sync && node dist/main
+    healthCheckPath: /api/logins/stats
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_TYPE
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+        # Supabase pooler (IPv4-friendly). Fill after linking, or in the
+        # service's Environment tab. URL-encode the password (@ -> %40).
+        # e.g. postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+      - key: ML_SERVICE_URL
+        fromService:
+          name: sentrylogin-ml
+          type: web
+          property: url
+      - key: CORS_ORIGIN
+        fromService:
+          name: sentrylogin-frontend
+          type: static
+          property: url
+
+  # --------------------------------------------------------------------------
+  # 3) Frontend (React + Vite static site)
+  # --------------------------------------------------------------------------
+  - type: static
+    name: sentrylogin-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    autoDeploy: true
+    envVars:
+      # The API client uses VITE_API_URL as the base for /logins, /alerts, ...
+      # so it MUST include the /api suffix. Render's fromService gives the bare
+      # origin — after the first deploy, append "/api" to this value
+      # (e.g. https://sentrylogin-api.onrender.com/api) and redeploy.
+      - key: VITE_API_URL
+        fromService:
+          name: sentrylogin-api
+          type: web
+          property: url
