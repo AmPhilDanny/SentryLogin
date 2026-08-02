@@ -187,7 +187,6 @@ export default function Upload() {
 
   const analyzeDisabled = (item: DatasetItem) =>
     item.status === 'analyzing' ||
-    item.status === 'complete' ||
     (item.detection !== null && !item.detection.canAnalyze);
 
   return (
@@ -381,7 +380,7 @@ export default function Upload() {
                             item.status === 'analyzing'
                               ? 'Analysis already running'
                               : item.status === 'complete'
-                                ? 'Already analyzed'
+                                ? 'Re-analyse this dataset (replaces previous results)'
                                 : !item.detection?.canAnalyze
                                   ? item.detection?.feedback.join(' ') ?? 'Not analyzable'
                                   : 'Run risk analysis'

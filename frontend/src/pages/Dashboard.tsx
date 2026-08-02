@@ -12,9 +12,10 @@ import {
   Loader2,
   RefreshCw,
   ArrowUpDown,
+  FileText,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { api, Stats, LoginDetail } from '../lib/api';
+import { api, Stats, LoginDetail, DatasetItem } from '../lib/api';
 
 const RISK_COLORS: Record<string, string> = {
   Low: '#22c55e',
@@ -55,8 +56,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [datasets, setDatasets] = useState<DatasetItem[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState('');
 
   const limit = 20;
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getDatasets()
+      .then((list) => {
+        if (cancelled) return;
+        setDatasets(list);
+        if (list.length > 0 && !selectedDatasetId) {
+          setSelectedDatasetId(list[0].id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDatasets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reload]);
 
   // Debounced user search -> filters.user, reset to page 1
   useEffect(() => {
@@ -67,13 +90,13 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Summary stats (load once)
+  // Summary stats (re-fetch when scope changes)
   useEffect(() => {
     api
-      .getStats()
+      .getStats(selectedDatasetId || undefined)
       .then(setStats)
       .catch(() => setStats(null));
-  }, [reload]);
+  }, [reload, selectedDatasetId]);
 
   // Logins list
   useEffect(() => {
@@ -85,6 +108,7 @@ export default function Dashboard() {
     if (filters.risk) params.risk = filters.risk;
     if (filters.dateFrom) params.dateFrom = filters.dateFrom;
     if (filters.dateTo) params.dateTo = filters.dateTo;
+    if (selectedDatasetId) params.datasetId = selectedDatasetId;
     api
       .getLogins(params)
       .then((res) => {
@@ -103,7 +127,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [page, filters, sortBy, sortOrder, reload]);
+  }, [page, filters, sortBy, sortOrder, reload, selectedDatasetId]);
 
   const handleSort = (value: string) => {
     if (value === sortBy) {
@@ -148,6 +172,8 @@ export default function Dashboard() {
   const from = total === 0 ? 0 : (page - 1) * limit + 1;
   const to = Math.min(page * limit, total);
 
+  const currentDataset = datasets.find((d) => d.id === selectedDatasetId) ?? null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -156,6 +182,45 @@ export default function Dashboard() {
           Overview of login activity and risk analysis
         </p>
       </div>
+
+      {datasets.length > 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <FileText className="h-5 w-5 text-accent" />
+            <div>
+              <p className="text-xs text-gray-500">Current dataset</p>
+              <p className="text-sm font-semibold text-white" title={currentDataset?.filename}>
+                {currentDataset?.filename ?? 'All data'}
+              </p>
+            </div>
+            {currentDataset && (
+              <div className="flex items-center gap-4 text-xs text-gray-400">
+                <span>{currentDataset.rowCount.toLocaleString()} rows</span>
+                <span className="text-risk-low">{currentDataset.importedCount.toLocaleString()} imported</span>
+                <span className={currentDataset.flaggedCount > 0 ? 'text-risk-high' : 'text-risk-low'}>
+                  {currentDataset.flaggedCount.toLocaleString()} flagged
+                </span>
+              </div>
+            )}
+          </div>
+          <select
+            className="input w-64"
+            value={selectedDatasetId}
+            onChange={(e) => {
+              setSelectedDatasetId(e.target.value);
+              setPage(1);
+            }}
+            title="Scope the dashboard to one dataset"
+          >
+            <option value="">All data</option>
+            {datasets.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.filename}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map(({ label, value, sub, icon: Icon, color }) => (

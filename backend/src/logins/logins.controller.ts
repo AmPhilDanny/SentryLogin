@@ -6,8 +6,8 @@ export class LoginsController {
   constructor(private readonly loginsService: LoginsService) {}
 
   @Get('stats')
-  async stats() {
-    return this.loginsService.getStats();
+  async stats(@Query('datasetId') datasetId?: string) {
+    return this.loginsService.getStats(datasetId || undefined);
   }
 
   @Get()
@@ -19,6 +19,7 @@ export class LoginsController {
       user: query.user,
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
+      datasetId: query.datasetId || undefined,
       sortBy: query.sortBy || 'timestamp',
       sortOrder: query.sortOrder === 'ASC' ? 'ASC' : 'DESC',
     });

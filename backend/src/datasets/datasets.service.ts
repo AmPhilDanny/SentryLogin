@@ -3,9 +3,10 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { parse } from 'csv-parse/sync';
 import { Dataset } from './dataset.entity';
@@ -48,12 +49,14 @@ export interface UploadResult {
 
 const CSV_COLUMNS = ['username', 'timestamp', 'ip', 'country', 'city', 'device', 'browser', 'success'];
 
+const DEFAULT_DATASET_NAME = 'Default sample data.csv';
+
 const MAX_STUCK_MS = 20 * 60 * 1000;
 
 type StageCallback = (stage: string, progress: number) => Promise<void>;
 
 @Injectable()
-export class DatasetsService {
+export class DatasetsService implements OnModuleInit {
   constructor(
     @InjectRepository(Dataset) private readonly datasetRepo: Repository<Dataset>,
     @InjectRepository(Login) private readonly loginRepo: Repository<Login>,
@@ -69,6 +72,104 @@ export class DatasetsService {
     private readonly rulesService: RulesService,
     private readonly configService: ConfigService,
   ) {}
+
+  /** On boot, group any legacy/seeded logins (datasetId = null) under a
+   *  "Default sample data" dataset so they appear like any other CSV. */
+  async onModuleInit() {
+    try {
+      await this.ensureDefaultDataset();
+    } catch (error) {
+      console.warn(
+        `[datasets] Default dataset backfill failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  private async ensureDefaultDataset() {
+    const orphanCount = await this.loginRepo.count({ where: { datasetId: IsNull() } });
+    if (orphanCount === 0) return;
+
+    const existing = await this.datasetRepo
+      .createQueryBuilder('d')
+      .where('d.filename = :name', { name: DEFAULT_DATASET_NAME })
+      .getOne();
+    if (existing) {
+      // Already created earlier — just claim the remaining orphan rows.
+      await this.loginRepo.update({ datasetId: IsNull() }, { datasetId: existing.id });
+      return;
+    }
+
+    const logins = await this.loginRepo.find({
+      where: { datasetId: IsNull() },
+      relations: ['user', 'riskScore'],
+      order: { timestamp: 'ASC' },
+    });
+
+    const flagged = logins.filter(
+      (l) => l.riskScore && l.riskScore.totalScore >= 40,
+    ).length;
+
+    const detection: DetectionResult = {
+      hasHeader: true,
+      columns: CSV_COLUMNS,
+      mapping: {
+        username: { source: 'column', index: 0, column: 'username' },
+        timestamp: { source: 'column', index: 1, column: 'timestamp' },
+        ip: { source: 'column', index: 2, column: 'ip' },
+        country: { source: 'column', index: 3, column: 'country' },
+        city: { source: 'column', index: 4, column: 'city' },
+        device: { source: 'column', index: 5, column: 'device' },
+        browser: { source: 'column', index: 6, column: 'browser' },
+        success: { source: 'column', index: 7, column: 'success' },
+      },
+      kind: 'login_standard',
+      kindLabel: 'Standard login log',
+      confidence: 100,
+      feedback: ['Seeded sample data shipped with the platform.'],
+      canAnalyze: true,
+      totalRows: orphanCount,
+    };
+
+    const defaultDs = this.datasetRepo.create({
+      filename: DEFAULT_DATASET_NAME,
+      createdBy: null,
+      rowCount: orphanCount,
+      importedCount: logins.length,
+      flaggedCount: flagged,
+      status: 'complete',
+      stage: 'Done',
+      progress: 100,
+      detection: JSON.stringify(detection),
+      rawCsv: this.serializeLoginsToCsv(logins),
+    });
+    const saved = await this.datasetRepo.save(defaultDs);
+    await this.loginRepo.update({ datasetId: IsNull() }, { datasetId: saved.id });
+  }
+
+  private serializeLoginsToCsv(logins: Login[]): string {
+    const escape = (value: unknown): string => {
+      const s = String(value ?? '');
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [CSV_COLUMNS.join(',')];
+    for (const l of logins) {
+      lines.push(
+        [
+          l.user?.username ?? l.userId,
+          l.timestamp.toISOString(),
+          l.ip,
+          l.country,
+          l.city,
+          l.device,
+          l.browser,
+          l.success,
+        ]
+          .map(escape)
+          .join(','),
+      );
+    }
+    return lines.join('\n');
+  }
 
   // -------------------------------------------------------------------------
   // Stage 1 — upload & store
@@ -211,6 +312,10 @@ export class DatasetsService {
       throw new BadRequestException(
         `This file cannot be analyzed as a login log. ${feedback}`,
       );
+    }
+
+    if (dataset.status === 'complete' || dataset.status === 'failed') {
+      await this.wipeDatasetRows(id);
     }
 
     dataset.status = 'analyzing';
@@ -536,6 +641,13 @@ export class DatasetsService {
       throw new ConflictException('Cannot delete a dataset while it is being analyzed');
     }
 
+    await this.wipeDatasetRows(id);
+    await this.datasetRepo.delete({ id });
+
+    return { deleted: true };
+  }
+
+  private async wipeDatasetRows(id: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const logins = await manager.find(Login, {
         where: { datasetId: id },
@@ -550,9 +662,6 @@ export class DatasetsService {
         await manager.delete(Alert, { loginId: In(loginIds) });
         await manager.delete(Login, { id: In(loginIds) });
       }
-      await manager.delete(Dataset, { id });
     });
-
-    return { deleted: true };
   }
 }

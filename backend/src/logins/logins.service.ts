@@ -14,6 +14,7 @@ export interface LoginsQuery {
   user?: string;
   dateFrom?: string;
   dateTo?: string;
+  datasetId?: string;
   sortBy: string;
   sortOrder: 'ASC' | 'DESC';
 }
@@ -59,6 +60,9 @@ export class LoginsService {
     }
     if (query.dateTo) {
       qb.andWhere('login.timestamp <= :dateTo', { dateTo: query.dateTo });
+    }
+    if (query.datasetId) {
+      qb.andWhere('login.datasetId = :datasetId', { datasetId: query.datasetId });
     }
 
     const sortBy = SORT_COLUMNS[query.sortBy] ?? SORT_COLUMNS.timestamp;
@@ -125,19 +129,32 @@ export class LoginsService {
     };
   }
 
-  async getStats() {
-    const total = await this.loginRepo.count();
-    const [critical, high, medium, low] = await Promise.all(
-      (['Critical', 'High', 'Medium', 'Low'] as const).map((label) =>
-        this.riskScoreRepo.count({ where: { label } }),
-      ),
-    );
+  async getStats(datasetId?: string) {
+    const where = datasetId ? { datasetId } : undefined;
+
+    const total = await this.loginRepo.count(where ? { where } : undefined);
+    const byLabel = await this.riskScoreRepo
+      .createQueryBuilder('risk')
+      .innerJoin('risk.login', 'login')
+      .select('risk.label', 'label')
+      .addSelect('COUNT(*)', 'count')
+      .where(datasetId ? 'login.datasetId = :datasetId' : '1 = 1', datasetId ? { datasetId } : {})
+      .groupBy('risk.label')
+      .getRawMany<{ label: string; count: string }>();
+
+    const counts: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    for (const row of byLabel) if (row.label in counts) counts[row.label] = Number(row.count);
+    const critical = counts.Critical;
+    const high = counts.High;
+    const medium = counts.Medium;
+    const low = counts.Low;
     const flagged = critical + high + medium; // Medium+ == total_score >= 40
 
     const top = await this.riskScoreRepo
       .createQueryBuilder('risk')
-      .leftJoinAndSelect('risk.login', 'login')
+      .innerJoinAndSelect('risk.login', 'login')
       .leftJoinAndSelect('login.user', 'user')
+      .where(datasetId ? 'login.datasetId = :datasetId' : '1 = 1', datasetId ? { datasetId } : {})
       .orderBy('risk.totalScore', 'DESC')
       .take(1)
       .getOne();

@@ -256,8 +256,9 @@ export const api = {
     return request<LoginDetail>(`/logins/${id}`);
   },
 
-  getStats() {
-    return request<Stats>('/logins/stats');
+  getStats(datasetId?: string) {
+    const qs = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
+    return request<Stats>(`/logins/stats${qs}`);
   },
 
   getProfile(userId: string) {

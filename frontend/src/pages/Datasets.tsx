@@ -8,6 +8,9 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
+  Play,
+  CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { api, DatasetItem, DatasetPreview } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -22,7 +25,9 @@ export default function Datasets() {
   const [preview, setPreview] = useState<DatasetPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const canDelete = hasRole(['super_admin']);
+  const canManage = hasRole(['manager', 'super_admin']);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +48,26 @@ export default function Datasets() {
       cancelled = true;
     };
   }, [reload]);
+
+  const anyAnalyzing = datasets.some((d) => d.status === 'analyzing');
+  useEffect(() => {
+    if (!anyAnalyzing) return;
+    const interval = setInterval(() => setReload((r) => r + 1), 2000);
+    return () => clearInterval(interval);
+  }, [anyAnalyzing]);
+
+  const handleAnalyze = useCallback(
+    async (item: DatasetItem) => {
+      setActionError(null);
+      try {
+        await api.analyzeDataset(item.id);
+        setReload((r) => r + 1);
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : 'Analysis could not start');
+      }
+    },
+    [],
+  );
 
   const togglePreview = useCallback(
     async (id: string) => {
@@ -127,6 +152,12 @@ export default function Datasets() {
         </div>
       )}
 
+      {actionError && (
+        <div className="card border-risk-critical/40">
+          <p className="text-sm text-risk-critical">{actionError}</p>
+        </div>
+      )}
+
       <div className="card">
         {error ? (
           <div className="flex flex-col items-center gap-3 py-8">
@@ -154,8 +185,10 @@ export default function Datasets() {
               <thead>
                 <tr className="border-b border-gray-700/50 text-xs uppercase tracking-wide text-gray-400">
                   <th className="py-2 pr-3 font-medium">Filename</th>
+                  <th className="py-2 pr-3 font-medium">Rows</th>
                   <th className="py-2 pr-3 font-medium">Imported</th>
                   <th className="py-2 pr-3 font-medium">Flagged</th>
+                  <th className="py-2 pr-3 font-medium">Status</th>
                   <th className="py-2 pr-3 font-medium">Uploaded</th>
                   <th className="py-2 pr-3 font-medium">By</th>
                   <th className="py-2 font-medium">Actions</th>
@@ -170,9 +203,11 @@ export default function Datasets() {
                     preview={preview}
                     previewLoading={previewLoading}
                     canDelete={canDelete}
+                    canManage={canManage}
                     deleting={deletingId === item.id}
                     isCurrentUser={user?.email === item.createdBy}
                     onTogglePreview={() => togglePreview(item.id)}
+                    onAnalyze={() => handleAnalyze(item)}
                     onDownload={() => handleDownload(item)}
                     onDelete={() => handleDelete(item)}
                   />
@@ -192,9 +227,11 @@ function DatasetRow({
   preview,
   previewLoading,
   canDelete,
+  canManage,
   deleting,
   isCurrentUser,
   onTogglePreview,
+  onAnalyze,
   onDownload,
   onDelete,
 }: {
@@ -203,21 +240,53 @@ function DatasetRow({
   preview: DatasetPreview | null;
   previewLoading: boolean;
   canDelete: boolean;
+  canManage: boolean;
   deleting: boolean;
   isCurrentUser: boolean;
   onTogglePreview: () => void;
+  onAnalyze: () => void;
   onDownload: () => void;
   onDelete: () => void;
 }) {
+  const analyzeDisabled =
+    item.status === 'analyzing' || (item.detection !== null && !item.detection.canAnalyze);
+
   return (
     <>
       <tr className="border-b border-gray-800/50 transition-colors hover:bg-surface-lighter/40">
         <td className="py-2.5 pr-3 font-medium text-white">{item.filename}</td>
+        <td className="py-2.5 pr-3 text-gray-300">{item.rowCount.toLocaleString()}</td>
         <td className="py-2.5 pr-3 text-gray-300">{item.importedCount.toLocaleString()}</td>
         <td className="py-2.5 pr-3">
           <span className={`badge ${item.flaggedCount > 0 ? 'badge-medium' : 'badge-low'}`}>
             {item.flaggedCount.toLocaleString()}
           </span>
+        </td>
+        <td className="py-2.5 pr-3">
+          {item.status === 'analyzing' ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
+              <div className="w-24">
+                <p className="text-xs font-medium text-accent">{item.stage ?? 'Analyzing…'}</p>
+                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-gray-700">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-500"
+                    style={{ width: `${item.progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : item.status === 'complete' ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-risk-low">
+              <CheckCircle className="h-3.5 w-3.5" /> Complete
+            </span>
+          ) : item.status === 'failed' ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-risk-critical" title={item.error ?? ''}>
+              <AlertTriangle className="h-3.5 w-3.5" /> Failed
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-gray-400">Uploaded</span>
+          )}
         </td>
         <td className="py-2.5 pr-3 text-gray-300">
           {new Date(item.createdAt).toLocaleString()}
@@ -241,6 +310,29 @@ function DatasetRow({
               <Eye className="ml-1 h-3.5 w-3.5" />
               Preview
             </button>
+            {canManage && (
+              <button
+                onClick={onAnalyze}
+                disabled={analyzeDisabled}
+                className="btn-ghost px-2 py-1 text-xs"
+                title={
+                  item.status === 'analyzing'
+                    ? 'Analysis already running'
+                    : item.status === 'complete'
+                      ? 'Re-analyse (replaces previous results)'
+                      : item.detection && !item.detection.canAnalyze
+                        ? item.detection.feedback.join(' ')
+                        : 'Run risk analysis'
+                }
+              >
+                {item.status === 'analyzing' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="h-3.5 w-3.5" />
+                )}
+                Analyse
+              </button>
+            )}
             <button
               onClick={onDownload}
               className="btn-ghost px-2 py-1 text-xs"
@@ -251,9 +343,9 @@ function DatasetRow({
             {canDelete && (
               <button
                 onClick={onDelete}
-                disabled={deleting}
+                disabled={deleting || item.status === 'analyzing'}
                 className="btn-ghost px-2 py-1 text-xs text-risk-high hover:bg-risk-critical/10 disabled:opacity-40"
-                title="Delete dataset"
+                title={item.status === 'analyzing' ? 'Wait for analysis to finish' : 'Delete dataset'}
               >
                 {deleting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -267,7 +359,7 @@ function DatasetRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={6} className="bg-surface-lighter/30 py-3 pl-4 pr-4">
+          <td colSpan={8} className="bg-surface-lighter/30 py-3 pl-4 pr-4">
             {previewLoading ? (
               <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-400">
                 <Loader2 className="h-4 w-4 animate-spin" />
