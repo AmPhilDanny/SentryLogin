@@ -223,6 +223,9 @@ curl.exe https://sentrylogin-api.onrender.com/api/logins/stats
   request takes 30–60 s to spin up. Retry once.
 - **`relation "logins" does not exist`** — schema missing; check the api start log (the start
   command runs `db-sync` automatically) or run `node dist/db-sync` against the DB.
+- **`relation "auth_users"/"datasets" does not exist` (deploy fails right after boot)** — a new
+  entity was added without registering it in `backend/src/db-sync.ts` (its `ENTITIES` list is
+  hardcoded, not `autoLoadEntities`). Add the entity there, rebuild, redeploy.
 - **`CASE types ... cannot be matched` / placeholder errors** — stale backend build; the
   Postgres-compatible SQL is in `ml.service.ts` (driver-aware `$n` vs `?` + explicit casts).
   Rebuild (`npm run build`) — don't reuse an old `dist`.
