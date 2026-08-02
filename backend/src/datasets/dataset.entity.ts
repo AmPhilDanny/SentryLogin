@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+export type DatasetStatus = 'uploaded' | 'analyzing' | 'complete' | 'failed';
 
 @Entity('datasets')
 export class Dataset {
@@ -20,6 +28,33 @@ export class Dataset {
   @Column({ name: 'created_by', type: 'varchar', nullable: true })
   createdBy!: string | null;
 
+  /** uploaded → analyzing → complete | failed */
+  @Column({ type: 'varchar', default: 'uploaded' })
+  status!: DatasetStatus;
+
+  /** Human-readable current pipeline stage while analyzing. */
+  @Column({ type: 'varchar', nullable: true })
+  stage!: string | null;
+
+  /** 0-100 progress while analyzing. */
+  @Column({ type: 'int', default: 0 })
+  progress!: number;
+
+  /** Error message when status === 'failed'. */
+  @Column({ type: 'text', nullable: true })
+  error!: string | null;
+
+  /** JSON-serialized DetectionResult from upload time. */
+  @Column({ type: 'text', nullable: true })
+  detection!: string | null;
+
+  /** Raw uploaded CSV content (kept for "view head" + re-analysis). */
+  @Column({ name: 'raw_csv', type: 'text', nullable: true })
+  rawCsv!: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt!: Date;
 }

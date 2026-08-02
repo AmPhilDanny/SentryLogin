@@ -110,13 +110,76 @@ export interface Stats {
   topScore: number | null;
 }
 
-export interface IngestResult {
-  total: number;
-  valid: number;
-  imported: number;
-  flagged: number;
+export interface FieldMapping {
+  source: 'column' | 'message' | 'value' | null;
+  index: number | null;
+  column: string | null;
+  note?: string;
+}
+
+export type DetectionKind =
+  | 'login_standard'
+  | 'ssh_syslog'
+  | 'network_flow'
+  | 'unknown';
+
+export interface DetectionResult {
+  hasHeader: boolean;
+  columns: string[];
+  mapping: {
+    username: FieldMapping;
+    timestamp: FieldMapping;
+    ip: FieldMapping;
+    country: FieldMapping;
+    city: FieldMapping;
+    device: FieldMapping;
+    browser: FieldMapping;
+    success: FieldMapping;
+  };
+  kind: DetectionKind;
+  kindLabel: string;
+  confidence: number;
+  feedback: string[];
+  canAnalyze: boolean;
+  totalRows: number;
+}
+
+export interface UploadResponse {
   datasetId: string;
-  errors: { row: number; message: string }[];
+  filename: string;
+  rowCount: number;
+  status: string;
+  detection: DetectionResult;
+}
+
+export type DatasetStatus = 'uploaded' | 'analyzing' | 'complete' | 'failed';
+
+export interface DatasetItem {
+  id: string;
+  filename: string;
+  rowCount: number;
+  importedCount: number;
+  flaggedCount: number;
+  createdAt: string;
+  createdBy: string | null;
+  status: DatasetStatus;
+  stage: string | null;
+  progress: number;
+  error: string | null;
+  detection: DetectionResult | null;
+}
+
+export interface DatasetHead {
+  columns: string[];
+  rows: string[][];
+  hasHeader: boolean;
+  total: number;
+}
+
+export interface DatasetPreview {
+  columns: string[];
+  rows: (string | number | boolean | null)[][];
+  total: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -141,22 +204,6 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-export interface DatasetItem {
-  id: string;
-  filename: string;
-  rowCount: number;
-  importedCount: number;
-  flaggedCount: number;
-  createdAt: string;
-  createdBy: string | null;
-}
-
-export interface DatasetPreview {
-  columns: string[];
-  rows: (string | number | boolean | null)[][];
-  total: number;
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -173,7 +220,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
     throw new Error('Session expired — please log in');
   }
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let message = `API error: ${res.status}`;
+    try {
+      const body = (await res.json()) as { message?: string | string[] };
+      if (body?.message) {
+        message = Array.isArray(body.message) ? body.message.join('; ') : body.message;
+      }
+    } catch {
+      // ignore parse failure — fall back to generic message
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 
@@ -234,12 +292,31 @@ export const api = {
         window.location.href = '/login';
         throw new Error('Session expired — please log in');
       }
-      return r.json() as Promise<IngestResult>;
+      if (!r.ok) {
+        return r.json().then((b) => {
+          throw new Error(b?.message ?? `API error: ${r.status}`);
+        });
+      }
+      return r.json() as Promise<UploadResponse>;
     });
   },
 
   getDatasets() {
     return request<DatasetItem[]>('/datasets');
+  },
+
+  getDataset(id: string) {
+    return request<DatasetItem>(`/datasets/${id}`);
+  },
+
+  getDatasetHead(id: string, limit = 30) {
+    return request<DatasetHead>(`/datasets/${id}/head?limit=${limit}`);
+  },
+
+  analyzeDataset(id: string) {
+    return request<{ started: boolean }>(`/datasets/${id}/analyze`, {
+      method: 'POST',
+    });
   },
 
   getDatasetPreview(id: string, limit = 50) {

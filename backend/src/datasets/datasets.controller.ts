@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Post,
   Query,
   Res,
 } from '@nestjs/common';
@@ -18,6 +19,22 @@ export class DatasetsController {
   @Get()
   list() {
     return this.datasetsService.list();
+  }
+
+  @Get(':id')
+  detail(@Param('id') id: string) {
+    return this.datasetsService.getDetail(id);
+  }
+
+  @Get(':id/head')
+  head(@Param('id') id: string, @Query('limit') limit?: string) {
+    return this.datasetsService.head(id, limit ? Number(limit) : 30);
+  }
+
+  @Roles('manager', 'super_admin')
+  @Post(':id/analyze')
+  async analyze(@Param('id') id: string) {
+    return this.datasetsService.startAnalysis(id);
   }
 
   @Get(':id/preview')

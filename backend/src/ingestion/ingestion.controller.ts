@@ -25,11 +25,11 @@ export class IngestionController {
       throw new BadRequestException('CSV file is required');
     }
 
-    const results = await this.ingestionService.processCsv(
+    const result = await this.ingestionService.uploadCsv(
       file.buffer,
       file.originalname,
       req.user?.email ?? null,
     );
-    return results;
+    return result;
   }
 }

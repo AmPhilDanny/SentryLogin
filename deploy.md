@@ -188,14 +188,40 @@ Auth API: `POST /api/auth/login` · `GET /api/auth/me` · `GET/POST /api/auth/us
 
 ## 3.5 Datasets API
 
-Every uploaded CSV is tracked in the `datasets` table (filename, row counts, uploader, date);
-its logins carry a `dataset_id`. Deleting a dataset cascades to its logins, features, rule
-hits, risk scores, explanations and alerts.
+Uploads are **two-stage**: `POST /api/ingest/csv` only stores the file and runs smart format
+detection (header vs headerless, column mapping, SSH-syslog message parsing, network-flow
+recognition). Analysis runs separately as a tracked background job with progress stages.
 
-- `GET /api/datasets` — list all datasets (any role)
-- `GET /api/datasets/:id/preview?limit=50` — first rows of the dataset (any role)
+Every uploaded CSV is tracked in the `datasets` table (filename, row counts, uploader, date,
+status `uploaded|analyzing|complete|failed`, stage + progress %); its logins carry a
+`dataset_id`. Deleting a dataset cascades to its logins, features, rule hits, risk scores,
+explanations and alerts.
+
+- `POST /api/ingest/csv` — stage 1: store + detect. Returns `{ datasetId, filename, rowCount,
+  status, detection }` where `detection` describes the mapped columns, format kind and feedback
+  (manager/super_admin only)
+- `GET /api/datasets` — list all datasets with status/progress/detection (any role)
+- `GET /api/datasets/:id` — single dataset detail (any role)
+- `GET /api/datasets/:id/head?limit=30` — first rows of the raw uploaded file (any role)
+- `POST /api/datasets/:id/analyze` — stage 2: start the analysis job (manager/super_admin
+  only; 409 while running, 400 if the file isn't a login log — e.g. network-flow CSVs)
+- `GET /api/datasets/:id/preview?limit=50` — first analyzed logins (any role)
 - `GET /api/datasets/:id/download` — regenerated CSV file (any role)
-- `DELETE /api/datasets/:id` — remove dataset + all related rows (super_admin only)
+- `DELETE /api/datasets/:id` — remove dataset + all related rows (super_admin only;
+  409 while analyzing)
+
+Analysis stages surfaced to the UI: `Queued → Parsing file → Mapping columns → Computing
+features & rules (25–90%) → Finalizing → Done`. Failures set `status=failed` with the reason
+in `error`; the UI polls `GET /api/datasets` every 2 s while any dataset is analyzing.
+
+Supported input formats (auto-detected):
+- Standard 8-column login logs (with or without header) — column names are fuzzy-matched
+- Headerless exports — columns classified by value patterns (epoch timestamps incl. Excel
+  scientific notation, IPv4, username/host heuristics)
+- SSH/syslog auth logs — username/IP/success extracted from `sshd` messages
+  (`Accepted`/`Failed`/`Invalid`/`Disconnected ... preauth`)
+- Network-flow CSVs (proto/packets/bytes/...) — detected, stored, viewable, but analysis is
+  blocked with explanatory feedback
 
 ---
 

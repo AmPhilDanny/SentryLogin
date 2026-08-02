@@ -20,8 +20,37 @@ const SAMPLE_CSV = [
   'carol,2026-01-05T15:00:00.000Z,,US,Chicago,Mac,Firefox,true',
 ].join('\n');
 
-describe('Ingestion E2E', () => {
+async function pollUntilComplete(
+  app: INestApplication,
+  token: string,
+  id: string,
+  timeoutMs = 15000,
+): Promise<{ status: string; error: string | null; imported: number; flagged: number }> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const res = await request(app.getHttpServer())
+      .get(`/api/datasets/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const data = res.body;
+    if (data.status === 'complete' || data.status === 'failed') {
+      return {
+        status: data.status,
+        error: data.error,
+        imported: data.importedCount,
+        flagged: data.flaggedCount,
+      };
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`Analysis did not finish within ${timeoutMs}ms`);
+}
+
+describe('Ingestion E2E (two-stage)', () => {
   let app: INestApplication;
+  let token: string;
+  let datasetId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -34,6 +63,12 @@ describe('Ingestion E2E', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
     );
     await app.init();
+
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: 'admin@sentry.local', password: 'Admin@1234' })
+      .expect(201);
+    token = login.body.accessToken;
   });
 
   afterAll(async () => {
@@ -46,24 +81,42 @@ describe('Ingestion E2E', () => {
     }
   });
 
-  it('uploads CSV, computes features, rules and risk scores', async () => {
+  it('stage 1: upload stores the file and detects the format (no analysis yet)', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/ingest/csv')
+      .set('Authorization', `Bearer ${token}`)
       .attach('file', Buffer.from(SAMPLE_CSV), 'sample.csv')
       .expect(201);
 
-    expect(res.body).toEqual({
-      total: 8,
-      valid: 7,
-      imported: 7,
-      flagged: 6,
-      errors: [{ row: 8, message: 'Missing columns: ip' }],
-    });
+    expect(res.body.status).toBe('uploaded');
+    expect(res.body.datasetId).toBeDefined();
+    expect(res.body.rowCount).toBe(8);
+    expect(res.body.detection.hasHeader).toBe(true);
+    expect(res.body.detection.kind).toBe('login_standard');
+    expect(res.body.detection.canAnalyze).toBe(true);
+    expect(res.body.detection.mapping.username.column).toBe('username');
+    expect(res.body.detection.mapping.success.column).toBe('success');
+    datasetId = res.body.datasetId;
+  });
+
+  it('stage 2: analyze runs as a tracked job that completes', async () => {
+    const start = await request(app.getHttpServer())
+      .post(`/api/datasets/${datasetId}/analyze`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+    expect(start.body.started).toBe(true);
+
+    const done = await pollUntilComplete(app, token, datasetId);
+    expect(done.status).toBe('complete');
+    expect(done.error).toBeNull();
+    expect(done.imported).toBe(7);
+    expect(done.flagged).toBe(6);
   });
 
   it('stores rule hits and risk scores for flagged logins', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/logins?user=alice&limit=50')
+      .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
     expect(list.body.data).toHaveLength(6);
@@ -80,6 +133,7 @@ describe('Ingestion E2E', () => {
 
     const detail = await request(app.getHttpServer())
       .get(`/api/logins/${burstRow.id}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
     expect(detail.body.features).toBeDefined();
@@ -99,6 +153,7 @@ describe('Ingestion E2E', () => {
   it('scores clean logins as Low', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/logins?user=bob&limit=50')
+      .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
     expect(list.body.data).toHaveLength(1);

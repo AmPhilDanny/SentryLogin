@@ -15,6 +15,7 @@ import { ExplanationsModule } from './explanations/explanations.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { AuthModule } from './auth/auth.module';
 import { DatasetsModule } from './datasets/datasets.module';
+import { DetectionModule } from './detection/detection.module';
 import { JwtAuthGuard, RolesGuard } from './auth/auth.guards';
 
 function buildOrmConfig(): TypeOrmModuleOptions {
@@ -49,6 +50,7 @@ function buildOrmConfig(): TypeOrmModuleOptions {
     TypeOrmModule.forRoot(buildOrmConfig()),
     AuthModule,
     DatasetsModule,
+    DetectionModule,
     IngestionModule,
     LoginsModule,
     ConfigModule,
