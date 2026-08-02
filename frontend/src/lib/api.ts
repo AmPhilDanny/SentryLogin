@@ -110,6 +110,52 @@ export interface Stats {
   topScore: number | null;
 }
 
+export interface TrendPoint {
+  t: string;
+  total: number;
+  failed: number;
+  flagged: number;
+  baseline: number;
+  spike: boolean;
+}
+
+export interface HeatmapCell {
+  day: number;
+  hour: number;
+  count: number;
+}
+
+export interface TopUsers {
+  username: string;
+  logins: number;
+  failed: number;
+}
+
+export interface TopRule {
+  ruleName: string;
+  count: number;
+  maxScore: number;
+}
+
+export interface BoxPoint {
+  key: string;
+  min: number;
+  q1: number;
+  median: number;
+  q3: number;
+  max: number;
+  mean: number;
+  count: number;
+}
+
+export interface ScatterPoint {
+  username: string;
+  success: boolean;
+  score: number;
+  geoKm: number;
+  tries: number;
+}
+
 export interface FieldMapping {
   source: 'column' | 'message' | 'value' | null;
   index: number | null;
@@ -259,6 +305,40 @@ export const api = {
   getStats(datasetId?: string) {
     const qs = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
     return request<Stats>(`/logins/stats${qs}`);
+  },
+
+  getTrend(datasetId?: string, bucket = 'hour', range = 24) {
+    const qs = new URLSearchParams();
+    if (datasetId) qs.set('datasetId', datasetId);
+    qs.set('bucket', bucket);
+    qs.set('range', String(range));
+    return request<{ bucket: string; range: number; points: TrendPoint[] }>(`/logins/trend?${qs}`);
+  },
+
+  getHeatmap(datasetId?: string) {
+    const qs = datasetId ? `?datasetId=${encodeURIComponent(datasetId)}` : '';
+    return request<HeatmapCell[]>(`/logins/heatmap${qs}`);
+  },
+
+  getTop(datasetId?: string, limit = 10) {
+    const qs = new URLSearchParams();
+    if (datasetId) qs.set('datasetId', datasetId);
+    qs.set('limit', String(limit));
+    return request<{ users: TopUsers[]; rules: TopRule[] }>(`/logins/top?${qs}`);
+  },
+
+  getBox(datasetId?: string, bucket = 'day') {
+    const qs = new URLSearchParams();
+    if (datasetId) qs.set('datasetId', datasetId);
+    qs.set('bucket', bucket);
+    return request<BoxPoint[]>(`/logins/box?${qs}`);
+  },
+
+  getScatter(datasetId?: string, limit = 500) {
+    const qs = new URLSearchParams();
+    if (datasetId) qs.set('datasetId', datasetId);
+    qs.set('limit', String(limit));
+    return request<ScatterPoint[]>(`/logins/scatter?${qs}`);
   },
 
   getProfile(userId: string) {

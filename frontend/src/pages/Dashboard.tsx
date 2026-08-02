@@ -15,7 +15,14 @@ import {
   FileText,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { api, Stats, LoginDetail, DatasetItem } from '../lib/api';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  ScatterChart, Scatter,
+} from 'recharts';
+import {
+  api, Stats, LoginDetail, DatasetItem,
+  TrendPoint, HeatmapCell, TopUsers, TopRule, BoxPoint, ScatterPoint,
+} from '../lib/api';
 
 const RISK_COLORS: Record<string, string> = {
   Low: '#22c55e',
@@ -58,6 +65,12 @@ export default function Dashboard() {
   const [reload, setReload] = useState(0);
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [heatmap, setHeatmap] = useState<HeatmapCell[]>([]);
+  const [topUsers, setTopUsers] = useState<TopUsers[]>([]);
+  const [topRules, setTopRules] = useState<TopRule[]>([]);
+  const [box, setBox] = useState<BoxPoint[]>([]);
+  const [scatter, setScatter] = useState<ScatterPoint[]>([]);
 
   const limit = 20;
 
@@ -96,6 +109,22 @@ export default function Dashboard() {
       .getStats(selectedDatasetId || undefined)
       .then(setStats)
       .catch(() => setStats(null));
+  }, [reload, selectedDatasetId]);
+
+  // Analytics charts (re-fetch when scope changes)
+  useEffect(() => {
+    const scope = selectedDatasetId || undefined;
+    api.getTrend(scope, 'hour', 24).then((r) => setTrend(r.points)).catch(() => setTrend([]));
+    api.getHeatmap(scope).then(setHeatmap).catch(() => setHeatmap([]));
+    api.getTop(scope, 10).then((r) => {
+      setTopUsers(r.users);
+      setTopRules(r.rules);
+    }).catch(() => {
+      setTopUsers([]);
+      setTopRules([]);
+    });
+    api.getBox(scope, 'day').then(setBox).catch(() => setBox([]));
+    api.getScatter(scope, 500).then(setScatter).catch(() => setScatter([]));
   }, [reload, selectedDatasetId]);
 
   // Logins list
@@ -277,6 +306,95 @@ export default function Dashboard() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="card">
+          <h3 className="mb-4 font-semibold text-white">Login Volume Trend</h3>
+          {trend.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No trend data.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trend} margin={{ top: 5, right: 10, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="t" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v: string) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e5e7eb' }}
+                    labelFormatter={(v: string) => new Date(v).toLocaleString()}
+                    itemStyle={{ color: '#e5e7eb' }}
+                  />
+                  <Line type="monotone" dataKey="baseline" name="Baseline" stroke="#64748b" strokeDasharray="4 4" dot={false} />
+                  <Line type="monotone" dataKey="total" name="Logins" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <h3 className="mb-4 font-semibold text-white">Activity Heatmap</h3>
+          {heatmap.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No heatmap data.</p>
+          ) : (
+            <HeatmapGrid cells={heatmap} />
+          )}
+        </div>
+
+        <div className="card">
+          <h3 className="mb-4 font-semibold text-white">Top Users & Rules</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">By logins</p>
+              {topUsers.length === 0 ? (
+                <p className="text-sm text-gray-500">No users.</p>
+              ) : (
+                <TopBars items={topUsers.map((u) => ({ label: u.username, value: u.logins }))} />
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">By rule hits</p>
+              {topRules.length === 0 ? (
+                <p className="text-sm text-gray-500">No rules.</p>
+              ) : (
+                <TopBars items={topRules.map((r) => ({ label: r.ruleName, value: r.count }))} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3 className="mb-4 font-semibold text-white">Risk Score Distribution</h3>
+          {box.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No box data.</p>
+          ) : (
+            <BoxDistributions data={box} />
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 className="mb-4 font-semibold text-white">Geo Distance vs Risk Score</h3>
+        {scatter.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-500">No scatter data.</p>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 10, right: 10, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis type="number" dataKey="geoKm" name="Geo Distance (km)" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis type="number" dataKey="score" name="Risk" domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e5e7eb' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                />
+                <Scatter name="Failed" data={scatter.filter((p) => !p.success)} fill="#ef4444" />
+                <Scatter name="Success" data={scatter.filter((p) => p.success)} fill="#22c55e" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-700/50 pb-3">
           <h3 className="font-semibold text-white">Recent Logins</h3>
@@ -445,6 +563,84 @@ export default function Dashboard() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function HeatmapGrid({ cells }: { cells: HeatmapCell[] }) {
+  const lookup = new Map<string, number>();
+  for (const c of cells) lookup.set(`${c.day}:${c.hour}`, c.count);
+  const max = Math.max(1, ...cells.map((c) => c.count));
+  return (
+    <div className="h-64 overflow-hidden">
+      <div className="flex gap-1 text-[10px] leading-4 text-gray-500">
+        <div className="w-7" />
+        {DAY_LABELS.map((d) => (
+          <div key={d} className="flex-1 text-center">
+            {d}
+          </div>
+        ))}
+      </div>
+      {Array.from({ length: 24 }, (_, hour) => (
+        <div key={hour} className="flex items-center gap-1">
+          <div className="w-7 text-right text-[10px] text-gray-500">{String(hour).padStart(2, '0')}</div>
+          {DAY_LABELS.map((_, day) => {
+            const v = lookup.get(`${day}:${hour}`) ?? 0;
+            const intensity = v / max;
+            return (
+              <div
+                key={day}
+                className="h-2.5 flex-1 rounded-sm border border-gray-800/40"
+                style={{ background: v === 0 ? '#0f172a' : `rgba(56, 189, 248, ${0.15 + 0.85 * intensity})` }}
+                title={`${DAY_LABELS[day]} ${String(hour).padStart(2, '0')}:00 — ${v} logins`}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TopBars({ items }: { items: { label: string; value: number }[] }) {
+  const max = Math.max(1, ...items.map((i) => i.value));
+  return (
+    <div className="space-y-2">
+      {items.map((i) => (
+        <div key={i.label} className="flex items-center gap-2" title={i.label}>
+          <span className="w-1/3 truncate text-xs text-gray-400">{i.label}</span>
+          <div className="h-3 flex-1 overflow-hidden rounded bg-gray-800">
+            <div className="h-full rounded bg-accent" style={{ width: `${(i.value / max) * 100}%` }} />
+          </div>
+          <span className="w-8 text-right text-xs text-gray-300">{i.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BoxDistributions({ data }: { data: BoxPoint[] }) {
+  return (
+    <div className="space-y-1">
+      {data.slice(0, 12).map((b) => (
+        <div key={b.key} className="flex items-center gap-2">
+          <span className="w-20 truncate text-xs text-gray-400" title={b.key}>
+            {b.key}
+          </span>
+          <div className="relative h-6 flex-1">
+            <div className="absolute top-1/2 h-px w-full bg-gray-700" />
+            <div className="absolute top-1/2 h-0.5 w-0.5 rounded-full bg-gray-400" style={{ left: `${b.min}%` }} />
+            <div className="absolute top-1/2 h-0.5 w-0.5 rounded-full bg-gray-400" style={{ left: `${b.max}%` }} />
+            <div className="absolute top-1/2 h-1 w-px bg-amber-400" style={{ left: `${b.max}%` }} />
+            <div className="absolute top-1/2 h-3 -translate-y-1/2 rounded-sm bg-sky-500/30" style={{ left: `${b.q1}%`, width: `${Math.max(0.5, b.q3 - b.q1)}%` }} />
+            <div className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-sky-300" style={{ left: `${b.median}%` }} />
+            <div className="absolute top-0.5 h-0.5 w-1 rounded bg-red-400" style={{ left: `${b.mean}%` }} />
+          </div>
+          <span className="w-12 text-right text-[10px] text-gray-500">n={b.count}</span>
+        </div>
+      ))}
     </div>
   );
 }

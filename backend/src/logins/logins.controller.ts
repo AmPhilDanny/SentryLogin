@@ -10,6 +10,39 @@ export class LoginsController {
     return this.loginsService.getStats(datasetId || undefined);
   }
 
+  @Get('trend')
+  async trend(
+    @Query('datasetId') datasetId?: string,
+    @Query('bucket') bucket?: string,
+    @Query('range') range?: string,
+  ) {
+    return this.loginsService.getTrend(
+      datasetId || undefined,
+      bucket || 'hour',
+      range ? Number(range) : 24,
+    );
+  }
+
+  @Get('heatmap')
+  async heatmap(@Query('datasetId') datasetId?: string) {
+    return this.loginsService.getHeatmap(datasetId || undefined);
+  }
+
+  @Get('top')
+  async top(@Query('datasetId') datasetId?: string, @Query('limit') limit?: string) {
+    return this.loginsService.getTop(datasetId || undefined, limit ? Number(limit) : 10);
+  }
+
+  @Get('box')
+  async box(@Query('datasetId') datasetId?: string, @Query('bucket') bucket?: string) {
+    return this.loginsService.getBox(datasetId || undefined, bucket || 'day');
+  }
+
+  @Get('scatter')
+  async scatter(@Query('datasetId') datasetId?: string, @Query('limit') limit?: string) {
+    return this.loginsService.getScatter(datasetId || undefined, limit ? Number(limit) : 500);
+  }
+
   @Get()
   async findAll(@Query() query: LoginsQuery) {
     return this.loginsService.findAll({
