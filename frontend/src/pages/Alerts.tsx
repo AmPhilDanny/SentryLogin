@@ -440,18 +440,6 @@ function AlertRow({
             </div>
           )}
 
-          {item.status === 'escalated' && !resolving && (
-            <button
-              onClick={() => onAction(item, 'investigated')}
-              disabled={acting}
-              className="btn-ghost px-2 py-1 text-xs"
-              title="Start investigation"
-            >
-              <Search className="mr-1 h-3.5 w-3.5" />
-              Investigate
-            </button>
-          )}
-
           {item.status === 'resolved' && item.notes && (
             <span className="text-[11px] text-gray-500">“{item.notes}”</span>
           )}
