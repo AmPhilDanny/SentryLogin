@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Shield, Upload, Activity, Bell, Database, LogOut } from 'lucide-react';
+import { Shield, Upload, Activity, Bell, Database, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 
 export function Layout() {
@@ -7,6 +7,7 @@ export function Layout() {
   const navigate = useNavigate();
 
   const canUpload = hasRole(['manager', 'super_admin']);
+  const canConfigure = hasRole(['manager', 'super_admin']);
 
   const navItems = [
     { to: '/', icon: Activity, label: 'Dashboard' },
@@ -15,6 +16,9 @@ export function Layout() {
   ];
   if (canUpload) {
     navItems.push({ to: '/upload', icon: Upload, label: 'Upload CSV' });
+  }
+  if (canConfigure) {
+    navItems.push({ to: '/settings/ai', icon: Settings, label: 'AI Settings' });
   }
 
   const handleLogout = () => {

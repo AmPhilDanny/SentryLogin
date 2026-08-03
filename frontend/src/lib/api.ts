@@ -260,6 +260,40 @@ export interface PaginatedResponse<T> {
 
 export type Role = 'analyst' | 'manager' | 'super_admin';
 
+export type AiProviderId = 'mistral' | 'openrouter' | 'gemini';
+
+export interface AiProviderSettings {
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  enabled: boolean;
+  configured: boolean;
+}
+
+export interface AiSettings {
+  defaultProvider: AiProviderId | null;
+  providers: Record<AiProviderId, AiProviderSettings>;
+}
+
+export interface AiTestResult {
+  ok: boolean;
+  provider: AiProviderId;
+  model: string;
+  message: string;
+  reply?: string;
+}
+
+export interface AiCompleteResult {
+  provider: AiProviderId;
+  model: string;
+  content: string;
+}
+
+export interface AiMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -462,6 +496,49 @@ export const api = {
     return request<Record<string, number>>('/config/rules', {
       method: 'PUT',
       body: JSON.stringify(rules),
+    });
+  },
+
+  getAiSettings() {
+    return request<AiSettings>('/ai/settings');
+  },
+
+  updateAiSettings(settings: {
+    defaultProvider: AiProviderId | null;
+    providers: Record<
+      AiProviderId,
+      { baseUrl: string; model: string; apiKey?: string; enabled: boolean }
+    >;
+  }) {
+    return request<AiSettings>('/ai/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  },
+
+  testAiProvider(input: {
+    provider: AiProviderId;
+    baseUrl?: string;
+    apiKey: string;
+    model: string;
+  }) {
+    return request<AiTestResult>('/ai/test', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  completeAi(input: {
+    provider?: AiProviderId;
+    model?: string;
+    baseUrl?: string;
+    messages: AiMessage[];
+    temperature?: number;
+    maxTokens?: number;
+  }) {
+    return request<AiCompleteResult>('/ai/complete', {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   },
 };

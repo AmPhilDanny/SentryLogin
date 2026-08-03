@@ -15,6 +15,7 @@ import { AiExplanation } from './explanations/ai-explanation.entity';
 import { Alert } from './alerts/alert.entity';
 import { AuthUser } from './auth/auth-user.entity';
 import { Dataset } from './datasets/dataset.entity';
+import { AiSettings } from './ai/ai-settings.entity';
 
 const ENTITIES = [
   User,
@@ -26,6 +27,7 @@ const ENTITIES = [
   Alert,
   AuthUser,
   Dataset,
+  AiSettings,
 ];
 
 async function main(): Promise<void> {

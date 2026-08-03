@@ -16,6 +16,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { AuthModule } from './auth/auth.module';
 import { DatasetsModule } from './datasets/datasets.module';
 import { DetectionModule } from './detection/detection.module';
+import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard, RolesGuard } from './auth/auth.guards';
 
 function buildOrmConfig(): TypeOrmModuleOptions {
@@ -61,6 +62,7 @@ function buildOrmConfig(): TypeOrmModuleOptions {
     UsersModule,
     ExplanationsModule,
     AlertsModule,
+    AiModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

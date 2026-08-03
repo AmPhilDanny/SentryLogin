@@ -7,6 +7,7 @@ import LoginDetail from './pages/LoginDetail';
 import Alerts from './pages/Alerts';
 import Login from './pages/Login';
 import Datasets from './pages/Datasets';
+import AiSettings from './pages/AiSettings';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/datasets" element={<Datasets />} />
+          <Route path="/settings/ai" element={<AiSettings />} />
           <Route path="/logins/:id" element={<LoginDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
