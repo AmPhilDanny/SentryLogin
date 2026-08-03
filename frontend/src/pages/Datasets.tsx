@@ -11,6 +11,7 @@ import {
   Play,
   CheckCircle,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import { api, DatasetItem, DatasetPreview } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -26,6 +27,8 @@ export default function Datasets() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [describingId, setDescribingId] = useState<string | null>(null);
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const canDelete = hasRole(['super_admin']);
   const canManage = hasRole(['manager', 'super_admin']);
 
@@ -123,6 +126,24 @@ export default function Datasets() {
     [],
   );
 
+  const handleDescribe = useCallback(
+    async (item: DatasetItem) => {
+      setActionError(null);
+      setDescribingId(item.id);
+      try {
+        const res = await api.describeDataset({ datasetId: item.id });
+        setDescriptions((d) => ({ ...d, [item.id]: res.content }));
+      } catch (e) {
+        setActionError(
+          e instanceof Error ? e.message : 'AI describe failed — is a default provider configured?',
+        );
+      } finally {
+        setDescribingId(null);
+      }
+    },
+    [],
+  );
+
   const totalImported = datasets.reduce((sum, d) => sum + d.importedCount, 0);
   const totalFlagged = datasets.reduce((sum, d) => sum + d.flaggedCount, 0);
 
@@ -208,6 +229,9 @@ export default function Datasets() {
                     isCurrentUser={user?.email === item.createdBy}
                     onTogglePreview={() => togglePreview(item.id)}
                     onAnalyze={() => handleAnalyze(item)}
+                    onDescribe={() => handleDescribe(item)}
+                    describing={describingId === item.id}
+                    description={descriptions[item.id] ?? null}
                     onDownload={() => handleDownload(item)}
                     onDelete={() => handleDelete(item)}
                   />
@@ -229,9 +253,12 @@ function DatasetRow({
   canDelete,
   canManage,
   deleting,
+  describing,
+  description,
   isCurrentUser,
   onTogglePreview,
   onAnalyze,
+  onDescribe,
   onDownload,
   onDelete,
 }: {
@@ -242,9 +269,12 @@ function DatasetRow({
   canDelete: boolean;
   canManage: boolean;
   deleting: boolean;
+  describing: boolean;
+  description: string | null;
   isCurrentUser: boolean;
   onTogglePreview: () => void;
   onAnalyze: () => void;
+  onDescribe: () => void;
   onDownload: () => void;
   onDelete: () => void;
 }) {
@@ -333,6 +363,21 @@ function DatasetRow({
                 Analyse
               </button>
             )}
+            {canManage && (
+              <button
+                onClick={onDescribe}
+                disabled={describing}
+                className="btn-ghost px-2 py-1 text-xs"
+                title="Ask the default AI provider to describe this dataset (masked data only)"
+              >
+                {describing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                AI Describe
+              </button>
+            )}
             <button
               onClick={onDownload}
               className="btn-ghost px-2 py-1 text-xs"
@@ -400,6 +445,15 @@ function DatasetRow({
               <p className="py-4 text-center text-sm text-gray-500">
                 Failed to load preview.
               </p>
+            )}
+            {description && (
+              <div className="mt-3 rounded-md border border-accent/30 bg-accent/5 p-3">
+                <p className="mb-1 flex items-center gap-1 text-xs font-medium text-accent">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI describe (masked data only)
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-gray-300">{description}</p>
+              </div>
             )}
           </td>
         </tr>

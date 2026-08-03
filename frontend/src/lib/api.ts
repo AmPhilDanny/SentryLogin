@@ -541,4 +541,11 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
+
+  describeDataset(input: { datasetId: string; prompt?: string }) {
+    return request<AiCompleteResult>('/ai/describe', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
 };
