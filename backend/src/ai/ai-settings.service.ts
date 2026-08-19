@@ -182,7 +182,6 @@ export class AiSettingsService implements OnModuleInit {
     };
   }
 
-  /** Decrypted key + config for a provider; key null if none configured. */
   async resolve(provider: AiProviderId): Promise<ResolvedProvider> {
     const row = await this.row();
     const cfg = row.providers?.[provider];

@@ -8,15 +8,9 @@ import { AiGatewayService } from './ai-gateway.service';
 import { AiProviderId } from './ai-settings.entity';
 
 /**
- * Privacy-safe "describe this dataset" flow.
- *
- * Real records never leave the platform. The backend:
- *   1. reads the stored head rows,
- *   2. masks PII-shaped cells (emails, IPs, usernames, device/browser IDs,
- *      geo tokens) into placeholders,
- *   3. sends only column names + a masked sample + derived counts to the
- *      configured AI provider,
- *   4. returns the model's narrative.
+ * Privacy boundary: real records never leave the platform. Reads stored head
+ * rows, masks PII-shaped cells, and sends only columns + masked sample +
+ * derived counts to the configured provider.
  */
 @Injectable()
 export class AiDescribeService {
@@ -102,7 +96,6 @@ export class AiDescribeService {
     return { content: result.text, provider, model: resolved.config.model };
   }
 
-  /** Replace PII-shaped values with masked placeholders. */
   private mask(value: string): string {
     const v = String(value ?? '');
     if (v === '') return '';
@@ -111,7 +104,6 @@ export class AiDescribeService {
     if (/^[0-9a-fA-F]{8}[-:][0-9a-fA-F]{4}[-:][0-9a-fA-F]{4}/.test(v))
       return '[mac]';
     if (/^[A-Za-z0-9_-]{24,}$/.test(v)) return '[id:hash]';
-    if (/^\d{1,2}:\d{2}/.test(v) || /^\d{4}-\d{2}-\d{2}/.test(v)) return v;
     return v;
   }
 }

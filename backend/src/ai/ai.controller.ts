@@ -118,7 +118,6 @@ export class AiController {
     }
 
     // Explicit override wins; otherwise use this provider's saved default model.
-    // The user always controls which model is called — nothing is hardcoded.
     const model = body.model?.trim() || resolved.config.model;
     if (!model) {
       throw new BadRequestException(

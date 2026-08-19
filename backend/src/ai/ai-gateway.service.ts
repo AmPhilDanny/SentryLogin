@@ -45,11 +45,9 @@ interface JsonResponse {
 }
 
 /**
- * Unified gateway over three LLM providers.
- *  - Mistral / OpenRouter: OpenAI-style /chat/completions
- *  - Gemini: generateContent
- * Each provider is resolved from *settings-supplied* baseUrl/model/apiKey — nothing
- * is hardcoded; the caller decides which model to use.
+ * Mistral / OpenRouter use OpenAI-style /chat/completions; Gemini uses
+ * generateContent. Config comes from settings — nothing is hardcoded; the
+ * caller decides which model to use.
  */
 @Injectable()
 export class AiGatewayService {
@@ -71,7 +69,6 @@ export class AiGatewayService {
     };
   }
 
-  /** Call a provider with the given config; returns the assistant text. */
   async completeRaw(options: AiCompleteOptions): Promise<JsonResponse> {
     const { provider, model, baseUrl } = options;
     if (!model.trim()) {

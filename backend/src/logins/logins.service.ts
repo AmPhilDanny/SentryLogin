@@ -363,7 +363,7 @@ export class LoginsService {
     return results.sort((a, b) => a.key.localeCompare(b.key));
   }
 
-async getScatter(datasetId?: string, limit = 500) {
+  async getScatter(datasetId?: string, limit = 500) {
     const n = Math.min(Math.max(limit, 1), 1000);
     const idsQb = this.loginRepo
       .createQueryBuilder('login')

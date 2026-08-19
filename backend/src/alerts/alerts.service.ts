@@ -86,7 +86,7 @@ export class AlertsService {
     };
   }
 
-async updateStatus(
+  async updateStatus(
     loginId: string,
     status: AlertStatus,
   ): Promise<AlertItem> {
